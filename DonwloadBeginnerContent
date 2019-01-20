@@ -1,0 +1,45 @@
+ ArrayList<File> content = new ArrayList<File>();
+
+StorageReference sr1 = FirebaseStorage.getInstance().getReferenceFromUrl("gs://engapp-c0f2e.appspot.com/beginner/1.mp3");
+StorageReference sr2 = FirebaseStorage.getInstance().getReferenceFromUrl("gs://engapp-c0f2e.appspot.com/beginner/2.mp3");
+StorageReference sr3 = FirebaseStorage.getInstance().getReferenceFromUrl("gs://engapp-c0f2e.appspot.com/beginner/3.mp3");
+
+File fl1 = null, fl2 = null, fl3 = null;
+
+DownloadBeginnerContent () {
+        try {
+            fl1 = File.createTempFile("fl1", "mp3");
+            fl2 = File.createTempFile("fl2", "mp3");
+            fl3 = File.createTempFile("fl3", "mp3");
+            } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        sr1.getFile(fl1);
+        sr2.getFile(fl2);
+        sr3.getFile(fl3).addOnSuccessListener(new OnSuccessListener<FileDownloadTask.TaskSnapshot>() {
+            @Override
+            public void onSuccess(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                // Successfully downloaded data to local file
+                // ...
+                Log.d(TAG, "Successfully");
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                // Handle failed download
+                // ...
+                Log.d(TAG, "Failure");
+            }
+        });
+
+        content.add(fl1);
+        content.add(fl2);
+        content.add(fl3);
+
+        for(File i : content){
+            if(i==null){
+                content.remove(i);
+            }
+        }
+      }
