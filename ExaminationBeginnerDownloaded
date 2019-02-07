@@ -1,0 +1,285 @@
+package com.fce.cuba.eng;
+
+import android.app.ProgressDialog;
+import android.media.MediaPlayer;
+import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
+import android.util.Patterns;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+
+import static android.graphics.Color.DKGRAY;
+
+
+public class ExaminationBeginnerDownloaded extends AppCompatActivity {
+
+    DownloadBeginnerContent DBcontent;
+    private int mNubmer = 0, score = 0, secs, mins, timer = 10, percentage, cc = 0;
+    private String mAnswer, mail;
+    private ArrayList<Integer> mistake = new ArrayList<Integer>();
+    private SeekBar volumeA1;
+    private Button toStart, examplaybtnA1, a1examtb1, a1examtb2, a1examtb3, a1examtb4;
+    private MediaPlayer mp1;
+    private LinearLayout active2, ei;
+    private ProgressBar circularProgressbar;
+    private TextView myTextProgress, seconds, minutes;
+    private EditText et;
+    private Handler h = new Handler();
+    private Thread ticker;
+    private static final String TAG = "logs";
+    private ProgressDialog progressDialog;
+    private MyTask mt;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.exam_instructions);
+
+        //obtaining data
+        progressDialog = new ProgressDialog(this);
+
+        //instruction activity
+        ei = (LinearLayout)findViewById(R.id.ei);
+        et = (EditText)findViewById(R.id.mail);
+        toStart = (Button)findViewById(R.id.tostart);
+        toStart.setEnabled(false);
+
+        mt = new MyTask();
+        mt.execute();
+
+        toStart.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mail = et.getText().toString();
+                if (!Patterns.EMAIL_ADDRESS.matcher(mail).matches()) {
+                    et.setError("Valid Recipient required");
+                    et.requestFocus();
+                    return;
+                }
+                ei.removeAllViews();
+
+                //Ticker
+                startTicker();
+                // examination activity
+                setContentView(R.layout.activity_examination_beginner);
+
+                active2 = (LinearLayout) findViewById(R.id.active2);
+                examplaybtnA1 = (Button) findViewById(R.id.examplaybtnA1);
+                a1examtb1 = (Button) findViewById(R.id.a1examtb1);
+                a1examtb2 = (Button) findViewById(R.id.a1examtb2);
+                a1examtb3 = (Button) findViewById(R.id.a1examtb3);
+                a1examtb4 = (Button) findViewById(R.id.a1examtb4);
+                seconds = (TextView) findViewById(R.id.seconds);
+                minutes = (TextView) findViewById(R.id.minutes);
+
+                volumeA1 = (SeekBar) findViewById(R.id.volumeA1);
+                volumeA1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                    @Override
+                    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                        float volumeNum = progress / 100f;
+                        mp1.setVolume(volumeNum, volumeNum);
+                    }
+                    @Override
+                    public void onStartTrackingTouch(SeekBar seekBar) { }
+                    @Override
+                    public void onStopTrackingTouch(SeekBar seekBar) { }
+                });
+                active2.setBackgroundColor(DKGRAY);
+                updateQuestion();
+            }
+        });
+    }
+
+    public void updateQuestion(){
+        if (mNubmer<DBcontent.getLength() && mins != 0){
+            releaseMedia();
+            mp1 = new MediaPlayer();
+            mp1.setLooping(false);
+            mp1.seekTo(0);
+            mp1.setVolume(0.5f, 0.5f);
+            a1examtb1.setText(DBcontent.getAnswers(mNubmer, 1));
+            a1examtb2.setText(DBcontent.getAnswers(mNubmer, 2));
+            a1examtb3.setText(DBcontent.getAnswers(mNubmer, 3));
+            a1examtb4.setText(DBcontent.getAnswers(mNubmer, 4));
+            mAnswer = DBcontent.getCorrectAnswers(mNubmer);
+            volumeA1.setProgress(50);
+            mNubmer++;
+        }else{
+            releaseMedia();
+            active2.removeAllViews();
+            stopTicker();
+
+            getResults();
+            EmailResultSender ERS = new EmailResultSender(mistake, mins, secs, percentage, mail);
+        }
+    }
+
+    public void onClick (View view){
+        Button answer = (Button) view;
+        if(answer.getText().equals(mAnswer)){
+            mp1.stop();
+            examplaybtnA1.setBackgroundResource(R.drawable.play);
+            score++;
+            updateQuestion();
+        }else{
+            mp1.stop();
+            examplaybtnA1.setBackgroundResource(R.drawable.play);
+            mistake.add(mNubmer);
+            updateQuestion();}
+    }
+
+
+    public void setPlayBtn (View view) {
+        if (!mp1.isPlaying()) {
+            try {
+                mp1.setDataSource(File.separator + DBcontent.getMusic(cc));
+                mp1.prepare();
+                mp1.start();
+                cc ++;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            examplaybtnA1.setBackgroundResource(R.drawable.stop);
+        } else {
+            mp1.pause();
+            examplaybtnA1.setBackgroundResource(R.drawable.play);
+        }
+    }
+
+    public void onDestroy(){
+        if(mp1!=null){
+            releaseMedia();}
+        mNubmer = 0;
+        if(ticker!=null){
+            stopTicker();}
+        super.onDestroy();
+    }
+
+
+    public void getResults(){
+        setContentView(R.layout.results_of_tests);
+        TextView numberofquestions, numberofcorrects, numberofincorrects, mistakes, totalquestions, fortime;
+        percentage = ((score*100)/DBcontent.getLength());
+
+        numberofquestions = (TextView)findViewById(R.id.numberofquestions);
+        numberofcorrects = (TextView)findViewById(R.id.numberofcorrects);
+        numberofincorrects = (TextView)findViewById(R.id.numberofincorrects);
+        mistakes = (TextView)findViewById(R.id.mistakes);
+        totalquestions = (TextView) findViewById(R.id.totalquestions);
+        fortime = (TextView)findViewById(R.id.fortime);
+        circularProgressbar = (ProgressBar)findViewById(R.id.circularProgressbar);
+        myTextProgress = (TextView)findViewById(R.id.myTextProgress);
+
+
+        circularProgressbar.setProgress(percentage);
+        myTextProgress.setText(Integer.toString(percentage));
+
+        numberofquestions.setText(String.valueOf(mNubmer) + " of " + String.valueOf(DBcontent.getLength()));
+        numberofcorrects.setText(String.valueOf(score));
+        numberofincorrects.setText(String.valueOf(mNubmer-score));
+        totalquestions.setText("Total questions: " + String.valueOf(DBcontent.getLength()));
+        mistakes.setText("You failed in: " + String.valueOf(mistake));
+        fortime.setText("You spent " + (10 - mins) + " minutes and " + (60 - secs) + " seconds.");
+    }
+
+    public void startTicker (){
+        ticker = new Thread (new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    for(mins = timer; mins >= 1; mins--){
+                        for(secs = 59; secs >= 1; secs --){
+                            Thread.sleep(1000);
+                            h.post(updateSeconds);
+                            Log.d(TAG, "Process a ticker");
+                        }
+                        h.post(updateMinutes);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        ticker.start();
+    }
+    private Runnable updateMinutes = new Runnable() {
+        @Override
+        public void run() {
+            minutes.setText(Integer.toString(mins));
+        }
+    };
+    private Runnable updateSeconds = new Runnable() {
+        @Override
+        public void run() {
+            if(secs<10){
+                seconds.setText(":0"+Integer.toString(secs));
+            }else{
+            seconds.setText(":"+Integer.toString(secs));
+            }
+        }
+    };
+
+    public void stopTicker (){
+        ticker.interrupt();
+        ticker=null;
+    }
+    public void releaseMedia (){
+        if (mp1 != null){
+            mp1.release();
+
+        }
+    }
+    class MyTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            progressDialog.setMax(100);
+            progressDialog.setMessage("We are obtaining data. Wait up.");
+            progressDialog.setTitle("Downloading");
+            progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+            progressDialog.closeOptionsMenu();
+            progressDialog.show();
+        }
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            DBcontent = new DownloadBeginnerContent("beginner","BeginnerContent", "Answers", "CorrectAnswers");
+            DBcontent.obtain();
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void result) {
+            super.onPostExecute(result);
+            progressDialog.dismiss();
+            if(DBcontent.getStatus() == true){
+                Toast.makeText(ExaminationBeginnerDownloaded.this, "Content is downloaded!", Toast.LENGTH_LONG).show();
+                toStart.setEnabled(true);
+            }
+            else{
+                Toast.makeText(ExaminationBeginnerDownloaded.this, "There is a mistake occured while obtaining data, try again later!", Toast.LENGTH_LONG).show();
+                finish();}
+        }
+    }
+
+}
+
+
+
+
+
